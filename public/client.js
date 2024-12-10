@@ -7,7 +7,7 @@ form.addEventListener('submit', async (event) => {
     const formData = new FormData(form);
     const file = formData.get('audioFile');
 
-    const response = await fetch('/upload', {
+    const response = await fetch('/analyze', {
         method: 'POST',
         headers: { 'Content-Type': file.type },
         body: file,
