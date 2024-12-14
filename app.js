@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import Meyda from 'meyda'
 import audioDecode from 'audio-decode';
+import MusicTempo from 'music-tempo'
 
 const app = express();
 const port = 3000;
@@ -39,36 +40,16 @@ app.post('/analyze', async (req, res) => {
     const audioBuffer = await audioDecode(req.body)
 
     // Analyze pitch using Meyda
-    const sampleRate = audioBuffer.sampleRate;
     const signal = audioBuffer.getChannelData(0); // Use the first channel
-    const frameSize = 1024;
+    const frameSize = 2 ** 13;
+    const musicTempo = new MusicTempo(signal)
 
-    const tablature = [];
+    const duration = audioBuffer.duration
 
-    for (let i = 0; i < signal.length; i += frameSize) {
-      const frame = signal.slice(i, i + frameSize);
+    const tablature = generateTablatureFromSignal(signal, frameSize);
+    const result = extractNotes(musicTempo, duration, tablature);
 
-      if (frame.length % 2 !== 0) {
-        break
-      }
-
-      const features = Meyda.extract(['chroma'], frame);
-
-      if (features && features.chroma) {
-        // Find the most prominent chroma index (note)
-        const maxChromaIndex = features.chroma.indexOf(Math.max(...features.chroma));
-        const noteName = noteNames[maxChromaIndex];
-
-        // Convert note name to frequency
-        const frequency = 440 * Math.pow(2, (maxChromaIndex - 9) / 12); // A4 = 440 Hz
-
-        // Map frequency to tablature
-        const tab = frequencyToTab(frequency);
-        if (tab) tablature.push({ ...tab, note: noteName });
-      }
-    }
-
-    res.json({ tablature });
+    res.json({ result });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error processing audio file' });
@@ -78,3 +59,64 @@ app.post('/analyze', async (req, res) => {
 app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
 });
+
+function extractNotes(musicTempo, duration, tablature) {
+  const result = [];
+
+  let prevBeat = 0;
+  let chromaIndex = 0;
+  for (const currBeat of musicTempo.beats) {
+    const beatFraction = (currBeat - prevBeat) / duration;
+    const chromaCount = Math.round(tablature.length * beatFraction);
+
+    const notes = tablature.slice(chromaIndex, chromaIndex + chromaCount);
+    chromaIndex += chromaCount;
+    prevBeat = currBeat;
+
+    const noteOccurrences = notes.reduce((acc, note) => {
+      acc[note.note] = (acc[note.note] || 0) + 1;
+
+      return acc;
+    }, {});
+
+    const mostFrequentNote = Object.keys(noteOccurrences).reduce((a, b) => noteOccurrences[a] > noteOccurrences[b] ? a : b);
+    const resultTab = notes[notes.findIndex((tab => tab?.note === mostFrequentNote))];
+
+    result.push(resultTab);
+  }
+  return result;
+}
+
+function generateTablatureFromSignal(signal, frameSize) {
+  const tablature = [];
+
+  for (let i = 0; i < signal.length; i += frameSize) {
+    const frame = signal.slice(i, i + frameSize);
+
+    if (frame.length % 2 !== 0) {
+      break;
+    }
+
+    const features = Meyda.extract(['chroma'], frame);
+
+    if (features?.chroma) {
+      // Find the most prominent chroma index (note)
+      const maxChromaIndex = features.chroma.indexOf(Math.max(...features.chroma));
+      const chromaValue = features.chroma[maxChromaIndex];
+      if (chromaValue > 0.5) {
+        const noteName = noteNames[maxChromaIndex];
+
+        // Convert note name to frequency
+        const frequency = 440 * Math.pow(2, (maxChromaIndex - 9) / 12); // A4 = 440 Hz
+
+        // Map frequency to tablature
+        const tab = frequencyToTab(frequency);
+        tab && tablature.push({ ...tab, note: noteName, chroma: chromaValue });
+      }
+      else {
+        tablature.push({note: '-'});
+      }
+    }
+  }
+  return tablature;
+}
