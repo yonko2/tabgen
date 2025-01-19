@@ -17,13 +17,28 @@ form.addEventListener('submit', async (event) => {
 });
 
 function loadTab(notes) {
-    const data = `
-  tabstave notation=true key=A time=4/4
+    document.getElementById('tab').replaceChildren()
+    
+    let data = 'options tab-stems=true tab-stem-direction=down'
 
-  notes :q =|: (5/2.5/3.7/4) :8 7-5h6/3 ^3^ 5h6-7/5 ^3^ :q 7V/4 |
-  notes :8 t12p7/4 s5s3/4 :8 3s:16:5-7/5 :q p5/4
-  text :w, |#segno, ,|, :hd, , #tr
-`
+    for (let i = 0; i < notes.result.length; i++) {
+        const element = notes.result[i];
+
+        if(i%8===0){
+            data+=`\ntabstave notation=true\nnotes`
+        }
+
+        if (element.fret) {
+            data += ` ${element.fret}/${element.string}`
+        }
+        else {
+            data += ' ## '
+        }
+
+        if ((i+1)%4===0){
+            data+= '|'
+        }
+    }
 
     const VF = Vex.Flow
 
