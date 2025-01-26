@@ -24,12 +24,12 @@ const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', '
 app.post('/analyze', async (req, res) => {
   try {
     const audioBuffer = await audioDecode(req.body)
-
     const signal = audioBuffer.getChannelData(0); // Use the first channel
+    
     const frameSize = 2 ** 13; // Increase power if more precision is needed
-    const musicTempo = new MusicTempo(signal)
-
     const tablature = generateTablatureFromSignal(signal, frameSize, audioBuffer.sampleRate);
+
+    const musicTempo = new MusicTempo(signal)
     const result = extractNotes(musicTempo, audioBuffer.duration, tablature);
 
     res.json({ result });
@@ -63,8 +63,8 @@ function extractNotes(musicTempo, duration, tablature) {
     }, {});
 
     const mostFrequentNote = Object.keys(noteOccurrences).reduce(
-      (a, b) => noteOccurrences[a] > noteOccurrences[b] ? a : b
-    );
+      (a, b) => noteOccurrences[a] > noteOccurrences[b] ? a : b,
+      '');
     const resultTab = notes[notes.findIndex((tab => tab?.fullNote === mostFrequentNote))];
 
     result.push(resultTab);
@@ -114,7 +114,7 @@ function generateTablatureFromSignal(signal, frameSize, sampleRate) {
   for (let i = 0; i < signal.length; i += frameSize) {
     const frame = signal.slice(i, i + frameSize);
 
-    if (frame.length % 2 !== 0) {
+    if (!Number.isInteger(Math.log2(frame.length))) {
       break;
     }
 
