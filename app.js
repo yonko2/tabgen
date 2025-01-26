@@ -47,17 +47,17 @@ function extractNotes(musicTempo, duration, tablature) {
   const result = [];
 
   let prevBeat = 0;
-  let chromaIndex = 0;
+  let currentWindowIndex = 0;
   for (const currBeat of musicTempo.beats) {
     const beatFraction = (currBeat - prevBeat) / duration;
-    const chromaCount = Math.round(tablature.length * beatFraction);
+    const windowSize = Math.round(tablature.length * beatFraction);
 
-    const notes = tablature.slice(chromaIndex, chromaIndex + chromaCount);
-    chromaIndex += chromaCount;
+    const notes = tablature.slice(currentWindowIndex, currentWindowIndex + windowSize);
+    currentWindowIndex += windowSize;
     prevBeat = currBeat;
 
     const noteOccurrences = notes.reduce((acc, note) => {
-      acc[note.note] = (acc[note.note] || 0) + 1;
+      acc[note.fullNote] = (acc[note.fullNote] || 0) + 1;
 
       return acc;
     }, {});
@@ -65,21 +65,26 @@ function extractNotes(musicTempo, duration, tablature) {
     const mostFrequentNote = Object.keys(noteOccurrences).reduce(
       (a, b) => noteOccurrences[a] > noteOccurrences[b] ? a : b
     );
-    const resultTab = notes[notes.findIndex((tab => tab?.note === mostFrequentNote))];
+    const resultTab = notes[notes.findIndex((tab => tab?.fullNote === mostFrequentNote))];
 
     result.push(resultTab);
   }
+
   return result;
 }
 
 function frequencyToTab(frequency) {
   const roots = Object.keys(standardTuning)
 
-  for (let i = 0; i < roots.length; i++) {
+  for (let i = roots.length - 1; i >= 0; i--) {
     const baseFreq = standardTuning[roots[i]];
     const fret = Math.round(12 * Math.log2(frequency / baseFreq));
+
     if (fret >= 0 && fret <= 12) {
-      return { string: i + 1, fret };
+      return {
+        string: roots.length - i,
+        fret: Math.abs(fret)
+      };
     }
   }
   return null;
@@ -133,7 +138,7 @@ function generateTablatureFromSignal(signal, frameSize, sampleRate) {
 
       const dominantFrequency = fundamentalFreqBinIndex * binWidth;
 
-      // Chroma is more precise
+      // Chroma is more precise than spectrum feature
       const maxChromaIndex = features.chroma.indexOf(Math.max(...features.chroma));
       const chromaValue = features.chroma[maxChromaIndex];
 
@@ -144,7 +149,15 @@ function generateTablatureFromSignal(signal, frameSize, sampleRate) {
         const exactFrequency = noteToFrequency(noteName, octave)
 
         const tab = frequencyToTab(exactFrequency);
-        tab && tablature.push({ ...tab, note: noteName, octave });
+
+        if (tab) {
+          tablature.push({
+            ...tab,
+            note: noteName,
+            octave,
+            fullNote: `${noteName}${octave}`
+          });
+        }
       }
       else {
         tablature.push({ note: '-' });

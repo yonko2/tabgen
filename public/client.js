@@ -28,7 +28,7 @@ function loadTab(notes) {
             data += `\ntabstave notation=true\nnotes`
         }
 
-        if (element.fret) {
+        if (element) {
             data += ` ${element.fret}/${element.string}`
         }
         else {
