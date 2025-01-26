@@ -18,14 +18,14 @@ form.addEventListener('submit', async (event) => {
 
 function loadTab(notes) {
     document.getElementById('tab').replaceChildren()
-    
+
     let data = 'options tab-stems=true tab-stem-direction=down'
 
     for (let i = 0; i < notes.result.length; i++) {
         const element = notes.result[i];
 
-        if(i%8===0){
-            data+=`\ntabstave notation=true\nnotes`
+        if (i % 8 === 0) {
+            data += `\ntabstave notation=true\nnotes`
         }
 
         if (element.fret) {
@@ -35,8 +35,8 @@ function loadTab(notes) {
             data += ' ## '
         }
 
-        if ((i+1)%4===0){
-            data+= '|'
+        if ((i + 1) % 4 === 0) {
+            data += '|'
         }
     }
 

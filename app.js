@@ -15,42 +15,27 @@ app.use(
   })
 );
 
-// Standard tuning frequencies for a guitar (EADGBE)
-const standardTuning = [82.41, 110.00, 146.83, 196.00, 246.94, 329.63];
+const A4 = 440;
 
-// Map chroma index to note names
+const standardTuning = { E2: 82.41, A2: 110.00, D3: 146.83, G3: 196.00, B3: 246.94, E4: 329.63 };
+
 const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-
-// Function to convert frequency to tablature
-function frequencyToTab(frequency) {
-  for (let string = 0; string < standardTuning.length; string++) {
-    const baseFreq = standardTuning[string];
-    const fret = Math.round(12 * Math.log2(frequency / baseFreq));
-    if (fret >= 0 && fret <= 12) {
-      return { string: string + 1, fret };
-    }
-  }
-  return null; // Out of range
-}
 
 app.post('/analyze', async (req, res) => {
   try {
     const audioBuffer = await audioDecode(req.body)
 
-    // Analyze pitch using Meyda
     const signal = audioBuffer.getChannelData(0); // Use the first channel
-    const frameSize = 2 ** 13;
+    const frameSize = 2 ** 13; // Increase power if more precision is needed
     const musicTempo = new MusicTempo(signal)
 
-    const duration = audioBuffer.duration
-
-    const tablature = generateTablatureFromSignal(signal, frameSize);
-    const result = extractNotes(musicTempo, duration, tablature);
+    const tablature = generateTablatureFromSignal(signal, frameSize, audioBuffer.sampleRate);
+    const result = extractNotes(musicTempo, audioBuffer.duration, tablature);
 
     res.json({ result });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Error processing audio file' });
+    res.status(500).json({ err });
   }
 });
 
@@ -77,7 +62,9 @@ function extractNotes(musicTempo, duration, tablature) {
       return acc;
     }, {});
 
-    const mostFrequentNote = Object.keys(noteOccurrences).reduce((a, b) => noteOccurrences[a] > noteOccurrences[b] ? a : b);
+    const mostFrequentNote = Object.keys(noteOccurrences).reduce(
+      (a, b) => noteOccurrences[a] > noteOccurrences[b] ? a : b
+    );
     const resultTab = notes[notes.findIndex((tab => tab?.note === mostFrequentNote))];
 
     result.push(resultTab);
@@ -85,7 +72,38 @@ function extractNotes(musicTempo, duration, tablature) {
   return result;
 }
 
-function generateTablatureFromSignal(signal, frameSize) {
+function frequencyToTab(frequency) {
+  const roots = Object.keys(standardTuning)
+
+  for (let i = 0; i < roots.length; i++) {
+    const baseFreq = standardTuning[roots[i]];
+    const fret = Math.round(12 * Math.log2(frequency / baseFreq));
+    if (fret >= 0 && fret <= 12) {
+      return { string: i + 1, fret };
+    }
+  }
+  return null;
+}
+
+function frequencyToOctave(frequency) {
+  let noteIndex = Math.round(12 * Math.log2(frequency / A4)) + 9; // Offset to start with C
+  const octave = Math.floor(noteIndex / 12) + 4; // Octave calculation
+
+  return octave
+}
+
+function noteToFrequency(note, octave) {
+  const noteIndex = noteNames.indexOf(note);
+  if (noteIndex === -1) {
+    throw new Error(`Invalid note: ${note}`);
+  }
+
+  const semitoneDifference = noteIndex - 9 + (octave - 4) * 12;
+
+  return A4 * Math.pow(2, semitoneDifference / 12);
+}
+
+function generateTablatureFromSignal(signal, frameSize, sampleRate) {
   const tablature = [];
 
   for (let i = 0; i < signal.length; i += frameSize) {
@@ -95,26 +113,44 @@ function generateTablatureFromSignal(signal, frameSize) {
       break;
     }
 
-    const features = Meyda.extract(['chroma'], frame);
+    const features = Meyda.extract(['amplitudeSpectrum', 'chroma'], frame);
 
-    if (features?.chroma) {
-      // Find the most prominent chroma index (note)
+    if (features?.amplitudeSpectrum && features?.chroma) {
+      const spectrum = features.amplitudeSpectrum;
+      const binWidth = sampleRate / frameSize;
+
+      // Second moment is a useful heuristic threshold to find the first peak (which is the fundamental frequency)
+      const threshold = Math.sqrt(spectrum.reduce((acc, num) => acc + num ** 2, 0) / spectrum.length)
+
+      let fundamentalFreqBinIndex = 0;
+
+      for (let i = 0; i < spectrum.length - 1; i++) {
+        if (spectrum[i] > threshold && spectrum[i] > spectrum[i + 1]) {
+          fundamentalFreqBinIndex = i
+          break;
+        }
+      }
+
+      const dominantFrequency = fundamentalFreqBinIndex * binWidth;
+
+      // Chroma is more precise
       const maxChromaIndex = features.chroma.indexOf(Math.max(...features.chroma));
       const chromaValue = features.chroma[maxChromaIndex];
+
       if (chromaValue > 0.5) {
         const noteName = noteNames[maxChromaIndex];
+        const octave = frequencyToOctave(dominantFrequency)
 
-        // Convert note name to frequency
-        const frequency = 440 * Math.pow(2, (maxChromaIndex - 9) / 12); // A4 = 440 Hz
+        const exactFrequency = noteToFrequency(noteName, octave)
 
-        // Map frequency to tablature
-        const tab = frequencyToTab(frequency);
-        tab && tablature.push({ ...tab, note: noteName, chroma: chromaValue });
+        const tab = frequencyToTab(exactFrequency);
+        tab && tablature.push({ ...tab, note: noteName, octave });
       }
       else {
-        tablature.push({note: '-'});
+        tablature.push({ note: '-' });
       }
     }
   }
+
   return tablature;
 }
