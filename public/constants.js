@@ -10,7 +10,7 @@ export const NoteOffsetC = 9;
 export const OctaveOffset = 4;
 export const NotesInOctave = 12;
 
-export const NoteSize = 2
+export const NoteSize = 1
 
 export const VexTabDurations = {
     1: 'w',

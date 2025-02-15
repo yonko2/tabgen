@@ -1,8 +1,12 @@
-import { NoteSize, VexTabDurations } from './constants.js';
+import { NoteSize, Port, VexTabDurations } from './constants.js';
 
 const VexTabNoteDuration = VexTabDurations[NoteSize]
 
+const socket = io();
+
 const form = document.getElementById('uploadForm');
+
+socket.on('tab', (tab) => loadTab(tab))
 
 form.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -17,7 +21,7 @@ form.addEventListener('submit', async (event) => {
     });
 
     const result = await response.json();
-    loadTab(result)
+    // loadTab(result)
 });
 
 function getVexTabNote(note) {
@@ -34,7 +38,7 @@ function loadTab(notes) {
     let data = 'options tab-stems=true tab-stem-direction=down'
 
     let lastVexTabNote = null;
-    notes.result.forEach((note, i) => {
+    notes.forEach((note, i) => {
         if (i % (8 * NoteSize) === 0) {
             data += `\ntabstave notation=true\nnotes`
         }

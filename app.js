@@ -2,6 +2,8 @@ import express from 'express'
 import Meyda from 'meyda'
 import audioDecode from 'audio-decode';
 import MusicTempo from 'music-tempo'
+import http from 'http'
+import { Server } from 'socket.io';
 import { A4, NoteNamesKeyC, NoteOffsetC, NotesInOctave, OctaveOffset, Port, StandardTuningFreq, NoteSize } from './public/constants.js';
 
 const app = express();
@@ -14,27 +16,31 @@ app.use(
   })
 );
 
+const server = http.createServer(app);
+const io = new Server(server);
+
 app.post('/analyze', async (req, res) => {
   try {
     const audioBuffer = await audioDecode(req.body)
     const signal = audioBuffer.getChannelData(0); // Use the first channel
 
-    const frameSize = 2 ** 13; // Increase power if more precision is needed
-    const tablature = generateTablatureFromSignal(signal, frameSize, audioBuffer.sampleRate);
-
     const musicTempo = new MusicTempo(signal)
-    const result = extractNotes(musicTempo, audioBuffer.duration, tablature);
+    const frameSize = 2 ** 13; // Increase power if more precision is needed
 
-    res.json({ result });
+    generateTablatureFromSignal(signal, frameSize, audioBuffer.sampleRate, musicTempo, audioBuffer.duration);
   } catch (err) {
     console.error(err);
     res.status(500).json({ err });
   }
 });
 
-app.listen(Port, () => {
+server.listen(Port, () => {
   console.log(`Server is running at http://localhost:${Port}`);
 });
+
+function emitTabEvent(musicTempo, duration, inferedTab) {
+  io.emit('tab', extractNotes(musicTempo, duration, inferedTab));
+}
 
 function extrapolateSubbeats(beats, factor) {
   if (beats.length < 2) return beats;
@@ -63,9 +69,12 @@ function extrapolateSubbeats(beats, factor) {
   }
 }
 
-
 function extractNotes(musicTempo, duration, tablature) {
   const result = [];
+
+  if (!tablature || tablature.length === 0) {
+    return []
+  }
 
   const subbeats = extrapolateSubbeats(musicTempo.beats, NoteSize)
 
@@ -132,8 +141,12 @@ function noteToFrequency(note, octave) {
   return A4 * Math.pow(2, semitoneDifference / NotesInOctave);
 }
 
-function generateTablatureFromSignal(signal, frameSize, sampleRate) {
+function generateTablatureFromSignal(signal, frameSize, sampleRate, musicTempo, duration) {
   const tablature = [];
+
+  const intervalId = setInterval(() => {
+    emitTabEvent(musicTempo, duration, tablature)
+  }, 500);
 
   for (let i = 0; i < signal.length; i += frameSize) {
     const frame = signal.slice(i, i + frameSize);
@@ -188,6 +201,11 @@ function generateTablatureFromSignal(signal, frameSize, sampleRate) {
       }
     }
   }
+
+  
+  emitTabEvent(musicTempo, duration, tablature)
+
+  clearInterval(intervalId)
 
   return tablature;
 }
