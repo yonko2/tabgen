@@ -1,10 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MP3 Upload</title>
+  <link rel="stylesheet" href="./styles.css">
 </head>
+
 <body>
   <h1>Upload MP3 File</h1>
   <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
@@ -12,7 +15,8 @@
     <button type="submit">Upload</button>
   </form>
   <div id="tab"></div>
-  <script src="./client.js"></script>
+  <script type="module" src="./client.js"></script>
   <script src="https://unpkg.com/vextab/releases/vextab-div.js"></script>
 </body>
+
 </html>

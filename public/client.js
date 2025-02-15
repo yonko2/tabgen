@@ -1,3 +1,7 @@
+import { NoteSize, VexTabDurations } from './constants.js';
+
+const VexTabNoteDuration = VexTabDurations[NoteSize]
+
 const form = document.getElementById('uploadForm');
 
 form.addEventListener('submit', async (event) => {
@@ -16,29 +20,40 @@ form.addEventListener('submit', async (event) => {
     loadTab(result)
 });
 
+function getVexTabNote(note) {
+    return ` ${note.fret}/${note.string}:${VexTabNoteDuration}`
+}
+
 function loadTab(notes) {
     document.getElementById('tab').replaceChildren()
 
+    if (VexTabNoteDuration === undefined) {
+        throw new Error("Unsupported note duration")
+    }
+
     let data = 'options tab-stems=true tab-stem-direction=down'
 
-    for (let i = 0; i < notes.result.length; i++) {
-        const element = notes.result[i];
-
-        if (i % 8 === 0) {
+    let lastVexTabNote = null;
+    notes.result.forEach((note, i) => {
+        if (i % (8 * NoteSize) === 0) {
             data += `\ntabstave notation=true\nnotes`
         }
 
-        if (element) {
-            data += ` ${element.fret}/${element.string}`
+        const vexTabNote = note ? getVexTabNote(note) : null
+
+        if (note && vexTabNote !== lastVexTabNote) {
+            data += vexTabNote
+            lastVexTabNote = vexTabNote
         }
         else {
             data += ' ## '
         }
 
-        if ((i + 1) % 4 === 0) {
+        if ((i + 1) % (4 * NoteSize) === 0) {
             data += '|'
+            lastVexTabNote = null
         }
-    }
+    });
 
     const VF = Vex.Flow
 
