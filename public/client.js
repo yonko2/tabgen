@@ -20,14 +20,17 @@ form.addEventListener('submit', async (event) => {
     const formData = new FormData(form);
     const file = formData.get('audioFile');
 
-    const response = await fetch('/analyze', {
+    const loadingText = document.getElementById('loadingText')
+
+    loadingText.classList.remove('hidden')
+
+    await fetch('/analyze', {
         method: 'POST',
         headers: { 'Content-Type': file.type },
         body: file,
     });
 
-    const result = await response.json();
-    // loadTab(result)
+    loadingText.classList.add('hidden')
 });
 
 function getVexTabNote(note) {

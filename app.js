@@ -29,7 +29,7 @@ app.post('/analyze', async (req, res) => {
 
     const musicTempo = new MusicTempo(signal)
 
-    const tablature = generateTablatureFromSignal(signal, audioBuffer.sampleRate, musicTempo, audioBuffer.duration);
+    const tablature = await generateTablatureFromSignal(signal, audioBuffer.sampleRate, musicTempo, audioBuffer.duration);
     const result = extractNotes(musicTempo, audioBuffer.duration, tablature)
 
     res.json({ result })
@@ -119,7 +119,7 @@ function frequencyToTab(frequency) {
     const baseFreq = StandardTuningFreq[roots[i]];
     const fret = Math.round(12 * Math.log2(frequency / baseFreq));
 
-    if (fret >= 0 && fret <= 12) {
+    if (fret >= 0 && fret <= 24) {
       return {
         string: roots.length - i,
         fret: Math.abs(fret)
@@ -153,7 +153,7 @@ async function generateTablatureFromSignal(signal, sampleRate, musicTempo, durat
 
   const intervalId = setInterval(() => {
     emitTabEvent(musicTempo, duration, tablature, progressPercentage)
-  }, 500);
+  }, 1000);
 
   for (let i = 0; i < signal.length; i += FrameSize) {
     const frame = signal.slice(i, i + FrameSize);
