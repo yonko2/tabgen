@@ -1,4 +1,4 @@
-import { NoteSize, Port, VexTabDurations } from './constants.js';
+import { NoteSize, VexTabDurations } from './constants.js';
 
 const VexTabNoteDuration = VexTabDurations[NoteSize]
 
@@ -8,8 +8,14 @@ const form = document.getElementById('uploadForm');
 
 socket.on('tab', (tab) => loadTab(tab))
 
+function emptyTab() {
+    document.getElementById('tab').replaceChildren()
+}
+
 form.addEventListener('submit', async (event) => {
     event.preventDefault();
+
+    emptyTab()
 
     const formData = new FormData(form);
     const file = formData.get('audioFile');
@@ -29,7 +35,7 @@ function getVexTabNote(note) {
 }
 
 function loadTab(notes) {
-    document.getElementById('tab').replaceChildren()
+    emptyTab()
 
     if (VexTabNoteDuration === undefined) {
         throw new Error("Unsupported note duration")

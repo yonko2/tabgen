@@ -10,6 +10,8 @@ export const NoteOffsetC = 9;
 export const OctaveOffset = 4;
 export const NotesInOctave = 12;
 
+export const FrameSize = 2 ** 13; // Increase power if more precision is needed
+
 export const NoteSize = 1
 
 export const VexTabDurations = {

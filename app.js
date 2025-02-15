@@ -4,7 +4,10 @@ import audioDecode from 'audio-decode';
 import MusicTempo from 'music-tempo'
 import http from 'http'
 import { Server } from 'socket.io';
-import { A4, NoteNamesKeyC, NoteOffsetC, NotesInOctave, OctaveOffset, Port, StandardTuningFreq, NoteSize } from './public/constants.js';
+import {
+  A4, NoteNamesKeyC, NoteOffsetC, NotesInOctave,
+  OctaveOffset, Port, StandardTuningFreq, NoteSize, FrameSize
+} from './public/constants.js';
 
 const app = express();
 app.use(express.static('public'));
@@ -25,9 +28,11 @@ app.post('/analyze', async (req, res) => {
     const signal = audioBuffer.getChannelData(0); // Use the first channel
 
     const musicTempo = new MusicTempo(signal)
-    const frameSize = 2 ** 13; // Increase power if more precision is needed
 
-    generateTablatureFromSignal(signal, frameSize, audioBuffer.sampleRate, musicTempo, audioBuffer.duration);
+    const tablature = generateTablatureFromSignal(signal, audioBuffer.sampleRate, musicTempo, audioBuffer.duration);
+    const result = extractNotes(musicTempo, audioBuffer.duration, tablature)
+
+    res.json({ result })
   } catch (err) {
     console.error(err);
     res.status(500).json({ err });
@@ -38,8 +43,8 @@ server.listen(Port, () => {
   console.log(`Server is running at http://localhost:${Port}`);
 });
 
-function emitTabEvent(musicTempo, duration, inferedTab) {
-  io.emit('tab', extractNotes(musicTempo, duration, inferedTab));
+function emitTabEvent(musicTempo, duration, inferedTab, progressPercentage) {
+  io.emit('tab', extractNotes(musicTempo, duration, inferedTab, progressPercentage));
 }
 
 function extrapolateSubbeats(beats, factor) {
@@ -69,7 +74,7 @@ function extrapolateSubbeats(beats, factor) {
   }
 }
 
-function extractNotes(musicTempo, duration, tablature) {
+function extractNotes(musicTempo, duration, tablature, progressPercentage) {
   const result = [];
 
   if (!tablature || tablature.length === 0) {
@@ -77,11 +82,12 @@ function extractNotes(musicTempo, duration, tablature) {
   }
 
   const subbeats = extrapolateSubbeats(musicTempo.beats, NoteSize)
+  const filteredSubbeats = subbeats.slice(0, subbeats.length * progressPercentage)
 
   let prevBeat = 0;
   let currentWindowIndex = 0;
-  for (const currBeat of subbeats) {
-    const beatFraction = (currBeat - prevBeat) / duration;
+  for (const currBeat of filteredSubbeats) {
+    const beatFraction = (currBeat - prevBeat) / (duration * progressPercentage);
     const windowSize = Math.round(tablature.length * beatFraction);
 
     const notes = tablature.slice(currentWindowIndex, currentWindowIndex + windowSize);
@@ -141,15 +147,16 @@ function noteToFrequency(note, octave) {
   return A4 * Math.pow(2, semitoneDifference / NotesInOctave);
 }
 
-function generateTablatureFromSignal(signal, frameSize, sampleRate, musicTempo, duration) {
+async function generateTablatureFromSignal(signal, sampleRate, musicTempo, duration) {
   const tablature = [];
+  let progressPercentage = 0;
 
   const intervalId = setInterval(() => {
-    emitTabEvent(musicTempo, duration, tablature)
+    emitTabEvent(musicTempo, duration, tablature, progressPercentage)
   }, 500);
 
-  for (let i = 0; i < signal.length; i += frameSize) {
-    const frame = signal.slice(i, i + frameSize);
+  for (let i = 0; i < signal.length; i += FrameSize) {
+    const frame = signal.slice(i, i + FrameSize);
 
     if (!Number.isInteger(Math.log2(frame.length))) {
       break;
@@ -159,7 +166,7 @@ function generateTablatureFromSignal(signal, frameSize, sampleRate, musicTempo, 
 
     if (features?.amplitudeSpectrum && features?.chroma) {
       const spectrum = features.amplitudeSpectrum;
-      const binWidth = sampleRate / frameSize;
+      const binWidth = sampleRate / FrameSize;
 
       // Root of Second moment is a useful heuristic threshold to find the first peak (which is the fundamental frequency)
       const threshold = Math.sqrt(spectrum.reduce((acc, num) => acc + num ** 2, 0) / spectrum.length)
@@ -199,11 +206,15 @@ function generateTablatureFromSignal(signal, frameSize, sampleRate, musicTempo, 
       else {
         tablature.push({ note: '-' });
       }
+
+      progressPercentage = i / signal.length
+
+      // Let the thread breathe (in the air)
+      await new Promise(resolve => setTimeout(resolve, 0))
     }
   }
 
-  
-  emitTabEvent(musicTempo, duration, tablature)
+  emitTabEvent(musicTempo, duration, tablature, 1)
 
   clearInterval(intervalId)
 
