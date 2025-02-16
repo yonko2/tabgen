@@ -6,13 +6,21 @@ const socket = io();
 
 const form = document.getElementById('uploadForm');
 
-socket.on('tab', (tab) => loadTab(tab))
+socket.on('tab', (tab) => { 
+    loadTab(tab)
+
+    document.getElementById('tab').scrollIntoView({ behavior: 'smooth', block: 'end' })
+})
+
+socket.on('tab-complete', () => {
+    loadingText.classList.add('hidden')
+})
 
 function emptyTab() {
     document.getElementById('tab').replaceChildren()
 }
 
-form.addEventListener('submit', async (event) => {
+form.addEventListener('submit', (event) => {
     event.preventDefault();
 
     emptyTab()
@@ -24,13 +32,11 @@ form.addEventListener('submit', async (event) => {
 
     loadingText.classList.remove('hidden')
 
-    await fetch('/analyze', {
+    fetch('/analyze', {
         method: 'POST',
         headers: { 'Content-Type': file.type },
         body: file,
     });
-
-    loadingText.classList.add('hidden')
 });
 
 function getVexTabNote(note) {

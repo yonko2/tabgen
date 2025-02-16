@@ -29,10 +29,9 @@ app.post('/analyze', async (req, res) => {
 
     const musicTempo = new MusicTempo(signal)
 
-    const tablature = await generateTablatureFromSignal(signal, audioBuffer.sampleRate, musicTempo, audioBuffer.duration);
-    const result = extractNotes(musicTempo, audioBuffer.duration, tablature)
+    generateTablatureFromSignal(signal, audioBuffer.sampleRate, musicTempo, audioBuffer.duration);
 
-    res.json({ result })
+    res.json({})
   } catch (err) {
     console.error(err);
     res.status(500).json({ err });
@@ -215,6 +214,8 @@ async function generateTablatureFromSignal(signal, sampleRate, musicTempo, durat
   }
 
   emitTabEvent(musicTempo, duration, tablature, 1)
+  
+  io.emit('tab-complete')
 
   clearInterval(intervalId)
 
